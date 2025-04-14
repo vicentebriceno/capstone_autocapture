@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { loadOpenCV } from '../utils/opencv_loader'
+import { loadOpenCV } from '../services/opencv_loader'
+import { alignImages } from '../services/image_aliner'
 
-// Referencias para las imágenes seleccionadas
 const referenceImage = ref<string | null>(null)
 const testImage = ref<string | null>(null)
 const cvInstance = ref<any>(null)
@@ -22,7 +22,6 @@ function handleTestImage(event: Event) {
   }
 }
 
-// Cargar imagen desde src como HTMLImageElement
 function readImageFromSrc(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -32,17 +31,19 @@ function readImageFromSrc(src: string): Promise<HTMLImageElement> {
   })
 }
 
-// Función principal de alineación
-async function alignImages(referenceSrc: string, testSrc: string) {
+function handleProcessImages() {
+  if (cvInstance.value && referenceImage.value && testImage.value && resultContainer.value) {
+    alignImages(cvInstance.value, referenceImage.value, testImage.value, resultContainer.value)
+  } else {
+    console.warn('⚠️ Falta algún parámetro para procesar las imágenes.')
+  }
+}
+
+async function processImages() {
   const cv = cvInstance.value
 
-  // 🔄 Limpiar el contenedor de resultados si ya había un canvas previo
-  if (resultContainer.value) {
-    resultContainer.value.innerHTML = ''
-  }
-
-  const referenceImg = await readImageFromSrc(referenceSrc)
-  const testImg = await readImageFromSrc(testSrc)
+  const referenceImg = await readImageFromSrc(referenceImage.value!)
+  const testImg = await readImageFromSrc(testImage.value!)
 
   const refCanvas = document.createElement('canvas')
   refCanvas.width = referenceImg.width
@@ -57,89 +58,13 @@ async function alignImages(referenceSrc: string, testSrc: string) {
   const referenceMat = cv.imread(refCanvas)
   const testMat = cv.imread(testCanvas)
 
-  const grayRef = new cv.Mat()
-  const grayTest = new cv.Mat()
-  cv.cvtColor(referenceMat, grayRef, cv.COLOR_RGBA2GRAY)
-  cv.cvtColor(testMat, grayTest, cv.COLOR_RGBA2GRAY)
-
-  const orb = new cv.ORB()
-
-  const kpRef = new cv.KeyPointVector()
-  const descRef = new cv.Mat()
-  orb.detectAndCompute(grayRef, new cv.Mat(), kpRef, descRef)
-
-  const kpTest = new cv.KeyPointVector()
-  const descTest = new cv.Mat()
-  orb.detectAndCompute(grayTest, new cv.Mat(), kpTest, descTest)
-
-  const bf = new cv.BFMatcher(cv.NORM_HAMMING, false)
-  const matches = new cv.DMatchVectorVector()
-  bf.knnMatch(descTest, descRef, matches, 2)
-
-  const goodMatches = new cv.DMatchVector()
-  for (let i = 0; i < matches.size(); i++) {
-    const m = matches.get(i).get(0)
-    const n = matches.get(i).get(1)
-    if (m.distance < 0.75 * n.distance) {
-      goodMatches.push_back(m)
-    }
+  if (resultContainer.value) {
+    resultContainer.value.innerHTML = ''
+    alignImages(cv, referenceMat, testMat, resultContainer.value)
   }
 
-  if (goodMatches.size() >= 10) {
-    const srcPoints = []
-    const dstPoints = []
-
-    for (let i = 0; i < goodMatches.size(); i++) {
-      const match = goodMatches.get(i)
-      const testPoint = kpTest.get(match.queryIdx).pt
-      const refPoint = kpRef.get(match.trainIdx).pt
-      srcPoints.push(testPoint.x, testPoint.y)
-      dstPoints.push(refPoint.x, refPoint.y)
-    }
-
-    const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
-    const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
-
-    const mask = new cv.Mat()
-    const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
-
-    const alignedMat = new cv.Mat()
-    const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
-    cv.warpPerspective(testMat, alignedMat, homography, dsize)
-
-    const canvasResult = document.createElement('canvas')
-    cv.imshow(canvasResult, alignedMat)
-
-    // ✅ Insertamos el canvas en el contenedor correspondiente
-    if (resultContainer.value) {
-      resultContainer.value.appendChild(canvasResult)
-    }
-
-    console.log('✅ Imagen alineada mostrada en canvas.')
-
-    // Limpiar memoria
-    srcMat.delete()
-    dstMat.delete()
-    mask.delete()
-    homography.delete()
-    alignedMat.delete()
-  } else {
-    console.warn('⚠️ No se encontraron suficientes coincidencias.')
-  }
-
-  // Liberar memoria
-  grayRef.delete()
-  grayTest.delete()
   referenceMat.delete()
   testMat.delete()
-  kpRef.delete()
-  kpTest.delete()
-  descRef.delete()
-  descTest.delete()
-  matches.delete()
-  goodMatches.delete()
-  bf.delete()
-  orb.delete()
 }
 
 onMounted(async () => {
@@ -179,10 +104,12 @@ onMounted(async () => {
 
     <button
       v-if="referenceImage && testImage"
-      @click="alignImages(referenceImage!, testImage!)"
+      @click="handleProcessImages"
     >
       Procesar imágenes
     </button>
+
+
 
     <!-- ✅ Aquí se muestra el resultado debajo -->
     <div ref="resultContainer" class="result-container"></div>
