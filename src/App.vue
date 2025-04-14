@@ -1,9 +1,19 @@
+<template>
+  <div>
+    <Navbar />
+    <div class="content">
+      <router-view />
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
-import Camera from './components/Camera.vue'
+import Navbar from './components/Navbar.vue'
 </script>
 
-<template>
-  <router-view />
-</template>
+<style scoped>
+.content {
+  margin-top: 70px; /* Ajusta según la altura de tu navbar */
+  padding: 1rem;
+}
+</style>
