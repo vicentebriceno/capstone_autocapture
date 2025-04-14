@@ -1,6 +1,7 @@
-import { detectKeypointsAndDescriptors } from './orb_processor'
+import { detectKeypointsAndDescriptors as detectSIFT } from './sift_processor'
+import { detectKeypointsAndDescriptors as detectORB } from './orb_processor'
 
-// Utilidad para cargar una imagen desde su src
+// Utilidad común para cargar imagen y convertir a Mat
 async function loadImageAsMat(cv: any, src: string): Promise<any> {
   const image = new Image()
   image.src = src
@@ -19,14 +20,66 @@ async function loadImageAsMat(cv: any, src: string): Promise<any> {
   return cv.imread(canvas)
 }
 
-export async function alignImages(cv: any, referenceImageSrc: string, testImageSrc: string, container: HTMLDivElement) {
-  // ✅ Cargamos las imágenes como Mat
+// === Función para alinear con SIFT ===
+export async function alignImagesWithSIFT(
+  cv: any,
+  referenceImageSrc: string,
+  testImageSrc: string,
+  container: HTMLDivElement
+) {
   const referenceMat = await loadImageAsMat(cv, referenceImageSrc)
   const testMat = await loadImageAsMat(cv, testImageSrc)
 
-  // Detectar keypoints y descriptores
-  const { keypoints: kpRef, descriptors: descRef, orb: orbRef } = await detectKeypointsAndDescriptors(cv, referenceMat)
-  const { keypoints: kpTest, descriptors: descTest, orb: orbTest } = await detectKeypointsAndDescriptors(cv, testMat)
+  const { keypoints: kpRef, descriptors: descRef, sift } = detectSIFT(cv, referenceMat)
+  const { keypoints: kpTest, descriptors: descTest, sift: siftTest } = detectSIFT(cv, testMat)
+
+  // FLANN params
+  const indexParams = new cv.FlannBasedMatcher_IndexParams()
+  indexParams.setInt('algorithm', 1) // FLANN_INDEX_KDTREE
+  indexParams.setInt('trees', 5)
+
+  const searchParams = new cv.FlannBasedMatcher_SearchParams()
+  searchParams.setInt('checks', 50)
+
+  const flann = new cv.FlannBasedMatcher(indexParams, searchParams)
+  const matches = new cv.DMatchVectorVector()
+  flann.knnMatch(descTest, descRef, matches, 2)
+
+  const goodMatches = new cv.DMatchVector()
+  for (let i = 0; i < matches.size(); i++) {
+    const m = matches.get(i).get(0)
+    const n = matches.get(i).get(1)
+    if (m.distance < 0.7 * n.distance) {
+      goodMatches.push_back(m)
+    }
+  }
+
+  if (goodMatches.size() > 10) {
+    applyHomographyAndDraw(cv, container, referenceMat, testMat, kpRef, kpTest, goodMatches)
+  } else {
+    console.warn('⚠️ No se encontraron suficientes coincidencias con SIFT.')
+  }
+
+  // Liberar memoria
+  kpRef.delete(); kpTest.delete()
+  descRef.delete(); descTest.delete()
+  matches.delete(); goodMatches.delete()
+  flann.delete(); sift.delete(); siftTest.delete()
+  referenceMat.delete(); testMat.delete()
+}
+
+// === Función para alinear con ORB ===
+export async function alignImagesWithORB(
+  cv: any,
+  referenceImageSrc: string,
+  testImageSrc: string,
+  container: HTMLDivElement
+) {
+  const referenceMat = await loadImageAsMat(cv, referenceImageSrc)
+  const testMat = await loadImageAsMat(cv, testImageSrc)
+
+  const { keypoints: kpRef, descriptors: descRef, orb } = await detectORB(cv, referenceMat)
+  const { keypoints: kpTest, descriptors: descTest, orb: orbTest } = await detectORB(cv, testMat)
 
   const bf = new cv.BFMatcher(cv.NORM_HAMMING, false)
   const matches = new cv.DMatchVectorVector()
@@ -41,57 +94,55 @@ export async function alignImages(cv: any, referenceImageSrc: string, testImageS
     }
   }
 
-  if (goodMatches.size() >= 10) {
-    const srcPoints: number[] = []
-    const dstPoints: number[] = []
-
-    for (let i = 0; i < goodMatches.size(); i++) {
-      const match = goodMatches.get(i)
-      const testPoint = kpTest.get(match.queryIdx).pt
-      const refPoint = kpRef.get(match.trainIdx).pt
-      srcPoints.push(testPoint.x, testPoint.y)
-      dstPoints.push(refPoint.x, refPoint.y)
-    }
-
-    const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
-    const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
-
-    const mask = new cv.Mat()
-    const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
-
-    const alignedMat = new cv.Mat()
-    const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
-    cv.warpPerspective(testMat, alignedMat, homography, dsize)
-
-    const canvasResult = document.createElement('canvas')
-    cv.imshow(canvasResult, alignedMat)
-
-    // Limpiar canvas anterior
-    container.innerHTML = ''
-    container.appendChild(canvasResult)
-
-    console.log('✅ Imagen alineada mostrada en canvas.')
-
-    // Limpiar memoria intermedia
-    srcMat.delete()
-    dstMat.delete()
-    mask.delete()
-    homography.delete()
-    alignedMat.delete()
+  if (goodMatches.size() > 10) {
+    applyHomographyAndDraw(cv, container, referenceMat, testMat, kpRef, kpTest, goodMatches)
   } else {
-    console.warn('⚠️ No se encontraron suficientes coincidencias.')
+    console.warn('⚠️ No se encontraron suficientes coincidencias con ORB.')
   }
 
   // Liberar memoria
-  kpRef.delete()
-  kpTest.delete()
-  descRef.delete()
-  descTest.delete()
-  matches.delete()
-  goodMatches.delete()
-  bf.delete()
-  orbRef.delete()
-  orbTest.delete()
-  referenceMat.delete()
-  testMat.delete()
+  kpRef.delete(); kpTest.delete()
+  descRef.delete(); descTest.delete()
+  matches.delete(); goodMatches.delete()
+  bf.delete(); orb.delete(); orbTest.delete()
+  referenceMat.delete(); testMat.delete()
+}
+
+// === Utilidad común para aplicar homografía y dibujar el resultado ===
+function applyHomographyAndDraw(cv: any, container: HTMLDivElement, referenceMat: any, testMat: any, kpRef: any, kpTest: any, goodMatches: any) {
+  const srcPoints: number[] = []
+  const dstPoints: number[] = []
+
+  for (let i = 0; i < goodMatches.size(); i++) {
+    const match = goodMatches.get(i)
+    const testPoint = kpTest.get(match.queryIdx).pt
+    const refPoint = kpRef.get(match.trainIdx).pt
+    srcPoints.push(testPoint.x, testPoint.y)
+    dstPoints.push(refPoint.x, refPoint.y)
+  }
+
+  const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
+  const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
+
+  const mask = new cv.Mat()
+  const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
+
+  const alignedMat = new cv.Mat()
+  const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
+  cv.warpPerspective(testMat, alignedMat, homography, dsize)
+
+  const canvasResult = document.createElement('canvas')
+  cv.imshow(canvasResult, alignedMat)
+
+  container.innerHTML = ''
+  container.appendChild(canvasResult)
+
+  console.log('✅ Imagen alineada mostrada en canvas.')
+
+  // Liberar memoria intermedia
+  srcMat.delete()
+  dstMat.delete()
+  mask.delete()
+  homography.delete()
+  alignedMat.delete()
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { loadOpenCV } from '../services/opencv_loader'
-import { alignImages } from '../services/image_aliner'
+import { alignImagesWithORB } from '../services/image_aliner'
 
 const referenceImage = ref<string | null>(null)
 const testImage = ref<string | null>(null)
@@ -33,7 +33,7 @@ function readImageFromSrc(src: string): Promise<HTMLImageElement> {
 
 function handleProcessImages() {
   if (cvInstance.value && referenceImage.value && testImage.value && resultContainer.value) {
-    alignImages(cvInstance.value, referenceImage.value, testImage.value, resultContainer.value)
+    alignImagesWithORB(cvInstance.value, referenceImage.value, testImage.value, resultContainer.value)
   } else {
     console.warn('⚠️ Falta algún parámetro para procesar las imágenes.')
   }
@@ -60,7 +60,7 @@ async function processImages() {
 
   if (resultContainer.value) {
     resultContainer.value.innerHTML = ''
-    alignImages(cv, referenceMat, testMat, resultContainer.value)
+    alignImagesWithORB(cv, referenceMat, testMat, resultContainer.value)
   }
 
   referenceMat.delete()
