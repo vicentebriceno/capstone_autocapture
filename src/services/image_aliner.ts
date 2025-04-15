@@ -85,19 +85,32 @@ export async function alignImagesWithORB(
   const matches = new cv.DMatchVectorVector()
   bf.knnMatch(descTest, descRef, matches, 2)
 
+  // 🔍 Información útil para debug
+  console.log('🔹 Keypoints referencia:', kpRef.size())
+  console.log('🔹 Keypoints prueba:', kpTest.size())
+  console.log('🔍 Coincidencias totales:', matches.size())
+
   const goodMatches = new cv.DMatchVector()
   for (let i = 0; i < matches.size(); i++) {
     const m = matches.get(i).get(0)
     const n = matches.get(i).get(1)
-    if (m.distance < 0.75 * n.distance) {
+    if (m.distance < 0.85 * n.distance) {
       goodMatches.push_back(m)
     }
   }
 
+  console.log('✅ Coincidencias buenas encontradas:', goodMatches.size())
+
   if (goodMatches.size() > 10) {
     applyHomographyAndDraw(cv, container, referenceMat, testMat, kpRef, kpTest, goodMatches)
   } else {
-    console.warn('⚠️ No se encontraron suficientes coincidencias con ORB.')
+    console.warn('⚠️ ORB no encontró suficientes coincidencias. Probando con SIFT...')
+    try {
+      await alignImagesWithSIFT(cv, referenceImageSrc, testImageSrc, container)
+    } catch (err) {
+      console.error('❌ Error al hacer fallback con SIFT:', err)
+    }
+    
   }
 
   // Liberar memoria
@@ -110,39 +123,53 @@ export async function alignImagesWithORB(
 
 // === Utilidad común para aplicar homografía y dibujar el resultado ===
 function applyHomographyAndDraw(cv: any, container: HTMLDivElement, referenceMat: any, testMat: any, kpRef: any, kpTest: any, goodMatches: any) {
-  const srcPoints: number[] = []
-  const dstPoints: number[] = []
+  try {
+    const srcPoints: number[] = []
+    const dstPoints: number[] = []
 
-  for (let i = 0; i < goodMatches.size(); i++) {
-    const match = goodMatches.get(i)
-    const testPoint = kpTest.get(match.queryIdx).pt
-    const refPoint = kpRef.get(match.trainIdx).pt
-    srcPoints.push(testPoint.x, testPoint.y)
-    dstPoints.push(refPoint.x, refPoint.y)
+    for (let i = 0; i < goodMatches.size(); i++) {
+      const match = goodMatches.get(i)
+      const testPoint = kpTest.get(match.queryIdx).pt
+      const refPoint = kpRef.get(match.trainIdx).pt
+      srcPoints.push(testPoint.x, testPoint.y)
+      dstPoints.push(refPoint.x, refPoint.y)
+    }
+
+    console.log('🟢 Puntos origen:', srcPoints)
+    console.log('🔵 Puntos destino:', dstPoints)
+
+    const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
+    const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
+
+    const mask = new cv.Mat()
+
+    const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
+
+    if (!homography || homography.empty()) {
+      console.warn('❌ Homografía no válida, no se puede aplicar.')
+      return
+    }
+
+
+    const alignedMat = new cv.Mat()
+    const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
+    cv.warpPerspective(testMat, alignedMat, homography, dsize)
+
+    const canvasResult = document.createElement('canvas')
+    cv.imshow(canvasResult, alignedMat)
+
+    container.innerHTML = ''
+    container.appendChild(canvasResult)
+
+    console.log('✅ Imagen alineada mostrada en canvas.')
+
+    // Limpieza
+    srcMat.delete()
+    dstMat.delete()
+    mask.delete()
+    homography.delete()
+    alignedMat.delete()
+  } catch (err) {
+    console.error('❌ Error al aplicar homografía:', err)
   }
-
-  const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
-  const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
-
-  const mask = new cv.Mat()
-  const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
-
-  const alignedMat = new cv.Mat()
-  const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
-  cv.warpPerspective(testMat, alignedMat, homography, dsize)
-
-  const canvasResult = document.createElement('canvas')
-  cv.imshow(canvasResult, alignedMat)
-
-  container.innerHTML = ''
-  container.appendChild(canvasResult)
-
-  console.log('✅ Imagen alineada mostrada en canvas.')
-
-  // Liberar memoria intermedia
-  srcMat.delete()
-  dstMat.delete()
-  mask.delete()
-  homography.delete()
-  alignedMat.delete()
 }
