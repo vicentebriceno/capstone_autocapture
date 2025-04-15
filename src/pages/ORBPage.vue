@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { loadOpenCV } from '../services/opencv_loader'
-import { alignImagesWithORB } from '../services/image_aliner'
+import { alignImagesWithORB, drawMatches, loadImageAsMat } from '../services/image_aliner'
+import { detectKeypointsAndDescriptors } from '../services/orb_processor'
 
 const referenceImage = ref<string | null>(null)
 const testImage = ref<string | null>(null)
@@ -22,15 +23,6 @@ function handleTestImage(event: Event) {
   }
 }
 
-function readImageFromSrc(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.src = src
-    img.onload = () => resolve(img)
-    img.onerror = reject
-  })
-}
-
 function handleProcessImages() {
   if (cvInstance.value && referenceImage.value && testImage.value && resultContainer.value) {
     alignImagesWithORB(cvInstance.value, referenceImage.value, testImage.value, resultContainer.value)
@@ -39,32 +31,38 @@ function handleProcessImages() {
   }
 }
 
-async function processImages() {
-  const cv = cvInstance.value
+async function handleShowMatches() {
+  if (cvInstance.value && referenceImage.value && testImage.value && resultContainer.value) {
+    const cv = cvInstance.value
 
-  const referenceImg = await readImageFromSrc(referenceImage.value!)
-  const testImg = await readImageFromSrc(testImage.value!)
+    const referenceMat = await loadImageAsMat(cv, referenceImage.value)
+    const testMat = await loadImageAsMat(cv, testImage.value)
 
-  const refCanvas = document.createElement('canvas')
-  refCanvas.width = referenceImg.width
-  refCanvas.height = referenceImg.height
-  refCanvas.getContext('2d')!.drawImage(referenceImg, 0, 0)
+    const { keypoints: kpRef, descriptors: descRef } = await detectKeypointsAndDescriptors(cv, referenceMat)
+    const { keypoints: kpTest, descriptors: descTest } = await detectKeypointsAndDescriptors(cv, testMat)
 
-  const testCanvas = document.createElement('canvas')
-  testCanvas.width = testImg.width
-  testCanvas.height = testImg.height
-  testCanvas.getContext('2d')!.drawImage(testImg, 0, 0)
+    const bf = new cv.BFMatcher(cv.NORM_HAMMING, false)
+    const matches = new cv.DMatchVectorVector()
+    bf.knnMatch(descTest, descRef, matches, 2)
 
-  const referenceMat = cv.imread(refCanvas)
-  const testMat = cv.imread(testCanvas)
+    const goodMatches = new cv.DMatchVector()
+    for (let i = 0; i < matches.size(); i++) {
+      const m = matches.get(i).get(0)
+      const n = matches.get(i).get(1)
+      if (m.distance < 0.85 * n.distance) {
+        goodMatches.push_back(m)
+      }
+    }
 
-  if (resultContainer.value) {
-    resultContainer.value.innerHTML = ''
-    alignImagesWithORB(cv, referenceMat, testMat, resultContainer.value)
+    drawMatches(cv, resultContainer.value, testMat, referenceMat, kpTest, kpRef, goodMatches)
+
+    kpRef.delete(); kpTest.delete()
+    descRef.delete(); descTest.delete()
+    matches.delete(); goodMatches.delete()
+    bf.delete(); referenceMat.delete(); testMat.delete()
+  } else {
+    console.warn('⚠️ No se puede mostrar coincidencias. Faltan imágenes o OpenCV.')
   }
-
-  referenceMat.delete()
-  testMat.delete()
 }
 
 onMounted(async () => {
@@ -109,9 +107,13 @@ onMounted(async () => {
       Procesar imágenes
     </button>
 
+    <button
+      v-if="referenceImage && testImage"
+      @click="handleShowMatches"
+    >
+      Ver coincidencias
+    </button>
 
-
-    <!-- ✅ Aquí se muestra el resultado debajo -->
     <div ref="resultContainer" class="result-container"></div>
   </div>
 </template>
@@ -127,7 +129,6 @@ onMounted(async () => {
 .input-group {
   margin: 1rem 0;
   text-align: center;
-
   display: flex;
   flex-direction: column;
   align-items: center;
