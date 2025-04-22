@@ -2,9 +2,6 @@ export async function detectKeypointsAndDescriptors(cv: any, image: any) {
   const gray = new cv.Mat()
   cv.cvtColor(image, gray, cv.COLOR_RGBA2GRAY)
 
-<<<<<<< HEAD
-  const orb = new cv.ORB(5000)
-=======
   //  Mejora contraste e iluminación
   cv.equalizeHist(gray, gray)
 
@@ -14,7 +11,6 @@ export async function detectKeypointsAndDescriptors(cv: any, image: any) {
   //  Aumentar cantidad y calidad de keypoints
   const orb = new cv.ORB(1000, 1.2, 5, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 10)
 
->>>>>>> c2a6f96d789c596fed7e809eab57506bf8e01aea
   const keypoints = new cv.KeyPointVector()
   const descriptors = new cv.Mat()
 

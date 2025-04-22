@@ -288,63 +288,6 @@ export async function alignImagesWithORB(
   referenceMat.delete(); testMat.delete()
 }
 
-// === Utilidad común para aplicar homografía y dibujar el resultado ===
-function applyHomographyAndDraw(cv: any, container: HTMLDivElement, referenceMat: any, testMat: any, kpRef: any, kpTest: any, goodMatches: any) {
-  try {
-    const srcPoints: number[] = [] // puntos en testMat
-    const dstPoints: number[] = [] // puntos en referenceMat
-
-    for (let i = 0; i < goodMatches.size(); i++) {
-      const match = goodMatches.get(i)
-      const testPoint = kpTest.get(match.queryIdx).pt
-      const refPoint = kpRef.get(match.trainIdx).pt
-      srcPoints.push(testPoint.x, testPoint.y)
-      dstPoints.push(refPoint.x, refPoint.y)
-    }
-
-    console.log('🟢 Puntos origen:', srcPoints)
-    console.log('🔵 Puntos destino:', dstPoints)
-
-    const srcMat = cv.matFromArray(srcPoints.length / 2, 1, cv.CV_32FC2, srcPoints)
-    const dstMat = cv.matFromArray(dstPoints.length / 2, 1, cv.CV_32FC2, dstPoints)
-
-    const mask = new cv.Mat()
-    const homography = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5, mask)
-
-    if (!homography || homography.empty()) {
-      console.warn('❌ Homografía no válida, no se puede aplicar.')
-      return
-    }
-
-    // ✂️ Aquí recortamos desde la imagen de prueba usando la referencia como guía
-    const croppedMat = new cv.Mat()
-    const dsize = new cv.Size(referenceMat.cols, referenceMat.rows)
-
-    console.log('📐 Usando warpPerspective para recortar la cédula desde la imagen grande...')
-    console.log('📏 Tamaño testMat:', testMat.cols, testMat.rows)
-    console.log('📏 Tamaño referenciaMat:', referenceMat.cols, referenceMat.rows)
-
-    // Recortar desde testMat usando la homografía (test → ref)
-    cv.warpPerspective(testMat, croppedMat, homography, dsize)
-
-    const canvasResult = document.createElement('canvas')
-    cv.imshow(canvasResult, croppedMat)
-
-    container.innerHTML = ''
-    container.appendChild(canvasResult)
-
-    console.log('✅ Cédula extraída y mostrada en canvas.')
-
-    // Limpieza
-    srcMat.delete()
-    dstMat.delete()
-    mask.delete()
-    homography.delete()
-    croppedMat.delete()
-  } catch (err) {
-    console.error('❌ Error al aplicar homografía:', err)
-  }
-}
 function drawMatches(
   cv: any,
   container: HTMLDivElement,
