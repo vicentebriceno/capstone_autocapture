@@ -29,5 +29,4 @@ coverage
 
 *.tsbuildinfo
 
-public/images/
-public/opencv/
+public
