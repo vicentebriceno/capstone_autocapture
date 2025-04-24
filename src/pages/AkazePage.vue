@@ -41,7 +41,7 @@ onMounted(async () => {
 
       if (frame.value) {
         capturedFrame.value = frame.value
-        await detectObjectBoundingBox(cvInstance.value, frame.value, resultContainer.value!, "brisk")
+        await detectObjectBoundingBox(cvInstance.value, frame.value, resultContainer.value!, "akaze")
       }
     }
   }, 1000)

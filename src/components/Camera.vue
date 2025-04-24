@@ -8,21 +8,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, onBeforeUnmount } from 'vue'
-
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 const videoRef = ref<HTMLVideoElement | null>(null)
 let stream: MediaStream | null = null
 
 onMounted(async () => {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true })
-    if (videoRef.value) videoRef.value.srcObject = stream
-  } catch (err) {
-    console.error('❌ Error al acceder a la cámara:', err)
-  }
+  stream = await navigator.mediaDevices.getUserMedia({ video: true })
+  if (videoRef.value) videoRef.value.srcObject = stream
 })
 
 onBeforeUnmount(() => {
-  if (stream) stream.getTracks().forEach((track) => track.stop())
+  stream?.getTracks().forEach(track => track.stop())
 })
+
+defineExpose({ videoRef })
 </script>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { loadOpenCV } from '../services/opencv_loader'
-import { alignWithMultipleReferences } from '../services/image_aliner'
 
 const testImage = ref<string | null>(null)
 const cvInstance = ref<any>(null)
@@ -22,7 +21,6 @@ function handleProcessImages() {
       '/images/reference3.jpg',
       '/images/reference4.jpg',
     ]
-    alignWithMultipleReferences(cvInstance.value, testImage.value, references, resultContainer.value)
   } else {
     console.warn('⚠️ Faltan parámetros para procesar la imagen.')
   }
