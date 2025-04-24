@@ -1,4 +1,4 @@
-import { createDetector } from './detectors'
+import { createDetector } from './detectors/index'
 
 export async function detectKeypointsAndDescriptors(
   cv: any,

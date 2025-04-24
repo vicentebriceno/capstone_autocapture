@@ -3,7 +3,6 @@
     <div class="relative w-[640px] h-[480px] bg-black rounded-lg overflow-hidden">
       <CameraVideo ref="cameraRef" />
       <DarkOverlay :width="640" :height="480" :opacity="0.8" />
-      <DetectionOverlay ref="overlayRef" :width="640" :height="480" />
     </div>
 
     <div ref="resultContainer" class="mt-4"></div>
