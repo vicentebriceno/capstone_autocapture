@@ -6,6 +6,7 @@ import BriskPage from '../pages/BriskPage.vue'
 import AkazePage from '../pages/AkazePage.vue'
 import CameraPage from '../pages/CameraPage.vue'
 import YOLOPage from '../pages/YOLOPage.vue'
+import QualityPage from '../pages/QualityPage.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: HomePage },
@@ -14,6 +15,7 @@ const routes = [
   { path: '/akaze', name: 'AKAZE', component: AkazePage },  
   { path: '/camera', name: 'Camera', component: CameraPage },
   { path: '/yolo', name: 'YOLO', component: YOLOPage },
+  { path: '/quality_check', name: 'Quality Check', component: QualityPage },
 ]
 
 const router = createRouter({
