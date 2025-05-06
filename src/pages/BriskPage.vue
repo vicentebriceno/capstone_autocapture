@@ -43,7 +43,7 @@ onMounted(async () => {
         await detectObjectBoundingBox(cvInstance.value, frame.value, resultContainer.value!, "brisk")
       }
     }
-  }, 1000)
+  }, 0)
 })
 
 onBeforeUnmount(() => {

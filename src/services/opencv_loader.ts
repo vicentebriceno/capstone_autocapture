@@ -1,11 +1,9 @@
 export async function loadOpenCV(): Promise<any> {
-  // Evitar cargar múltiples veces
   if ((window as any).cv && (window as any).cv.ready) {
     return (window as any).cv
   }
 
   return new Promise((resolve, reject) => {
-    // Cargar el script de OpenCV
     const script = document.createElement('script')
     script.src = '/opencv/opencv_js.js'
     script.async = true
@@ -15,7 +13,6 @@ export async function loadOpenCV(): Promise<any> {
 
       const cvFactory = (globalThis as any).cv
       if (typeof cvFactory === 'function') {
-
         cvFactory({
           locateFile(path: string) {
             if (path.endsWith('.wasm')) {
@@ -25,6 +22,7 @@ export async function loadOpenCV(): Promise<any> {
           }
         }).then((cv: any) => {
           console.log('OpenCV.js inicializado desde factory.')
+          console.log('Build info:\n', cv.getBuildInformation?.() || 'getBuildInformation() no está disponible')
           ;(window as any).cv = cv
           resolve(cv)
         }).catch((err: any) => {
